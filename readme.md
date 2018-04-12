@@ -4,7 +4,7 @@
 - [x] Ubuntu 16.04 / Qt 5.5.1 / GCC 5.4.0 
 - [ ] OS X
 
-#### usage:
+#### Usage:
 
 ```
 git clone https://github.com/ffiirree/qxtglobalshortcut.git
@@ -28,3 +28,7 @@ connect(shortcut, &QxtGlobalShortcut::activated, [=](){
     qDebug() << "shortcut activated";
 });
 ```
+
+#### References
+- [Global HotKey WinAPI in Qt5](https://evileg.com/en/post/165/)
+- [Global HotKey in Linux](https://evileg.com/en/post/174/)
