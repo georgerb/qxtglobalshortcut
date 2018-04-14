@@ -12,7 +12,7 @@ SOURCES += $$PWD/src/qxtglobalshortcut.cpp
 
 # Linux
 unix:!macx {
-        QT += x11extras gui-private
+        QT += x11extras
         CONFIG += X11
         SOURCES += $$PWD/src/qxtglobalshortcut_x11.cpp
 }

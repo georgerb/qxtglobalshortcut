@@ -31,7 +31,7 @@
 
 #include <QVector>
 #include <QApplication>
-#include <qpa/qplatformnativeinterface.h>
+#include <QX11Info>
 #include <xcb/xcb.h>
 #include <X11/Xlib.h>
 
@@ -44,7 +44,16 @@ typedef int (*X11ErrorHandler)(Display *display, XErrorEvent *event);
 
 class QxtX11ErrorHandler {
 public:
-    static bool error;
+    QxtX11ErrorHandler()
+    {
+        error = false;
+        handler_ = XSetErrorHandler(qxtX11ErrorHandler);
+    }
+
+    ~QxtX11ErrorHandler()
+    {
+        XSetErrorHandler(handler_);
+    }
 
     static int qxtX11ErrorHandler(Display *display, XErrorEvent *event)
     {
@@ -65,72 +74,57 @@ public:
         return 0;
     }
 
-    QxtX11ErrorHandler()
-    {
-        error = false;
-        m_previousErrorHandler = XSetErrorHandler(qxtX11ErrorHandler);
-    }
-
-    ~QxtX11ErrorHandler()
-    {
-        XSetErrorHandler(m_previousErrorHandler);
-    }
+    static bool error;
 
 private:
-    X11ErrorHandler m_previousErrorHandler;
+    X11ErrorHandler handler_;
 };
 
 bool QxtX11ErrorHandler::error = false;
 
-class QxtX11Data {
+class QxtX11Key {
 public:
-    QxtX11Data() {
-        QPlatformNativeInterface *native = qApp->platformNativeInterface();
-        void *display = native->nativeResourceForScreen(QByteArray("display"),
-                                                        QGuiApplication::primaryScreen());
-        m_display = reinterpret_cast<Display *>(display);
+    QxtX11Key() {
+        display_ = QX11Info::display();
+        window_ = DefaultRootWindow(display());
     }
 
-    bool isValid() { return m_display != 0; }
+    inline bool isValid() { return display_ != 0; }
+    inline Display *display() {  Q_ASSERT(isValid()); return display_; }
 
-    Display *display()
+    bool grab(quint32 keycode, quint32 modifiers)
     {
-        Q_ASSERT(isValid());
-        return m_display;
-    }
+        if(!isValid()) return false;
 
-    Window rootWindow() { return DefaultRootWindow(display()); }
-
-    bool grabKey(quint32 keycode, quint32 modifiers, Window window)
-    {
         QxtX11ErrorHandler errorHandler;
-
         for (int i = 0; !errorHandler.error && i < maskModifiers.size(); ++i) {
-            XGrabKey(display(), keycode, modifiers | maskModifiers[i], window, True,
+            XGrabKey(display(), keycode, modifiers | maskModifiers[i], window_, True,
                      GrabModeAsync, GrabModeAsync);
         }
 
         if (errorHandler.error) {
-            ungrabKey(keycode, modifiers, window);
+            ungrab(keycode, modifiers);
             return false;
         }
 
         return true;
     }
 
-    bool ungrabKey(quint32 keycode, quint32 modifiers, Window window)
+    bool ungrab(quint32 keycode, quint32 modifiers)
     {
-        QxtX11ErrorHandler errorHandler;
+        if(!isValid()) return false;
 
+        QxtX11ErrorHandler errorHandler;
         foreach (quint32 maskMods, maskModifiers) {
-            XUngrabKey(display(), keycode, modifiers | maskMods, window);
+            XUngrabKey(display(), keycode, modifiers | maskMods, window_);
         }
 
         return !errorHandler.error;
     }
 
 private:
-    Display *m_display;
+    Display *display_ = nullptr;
+    Window window_;
 };
 
 } // namespace
@@ -188,25 +182,19 @@ quint32 QxtGlobalShortcutPrivate::nativeModifiers(Qt::KeyboardModifiers modifier
 
 quint32 QxtGlobalShortcutPrivate::nativeKeycode(Qt::Key key)
 {
-    QxtX11Data x11;
-    if (!x11.isValid())
-        return 0;
-
     KeySym keysym = XStringToKeysym(QKeySequence(key).toString().toLatin1().data());
     if (keysym == NoSymbol)
         keysym = static_cast<ushort>(key);
 
-    return XKeysymToKeycode(x11.display(), keysym);
+    return XKeysymToKeycode(QxtX11Key().display(), keysym);
 }
 
 bool QxtGlobalShortcutPrivate::registerShortcut(quint32 nativeKey, quint32 nativeMods)
 {
-    QxtX11Data x11;
-    return x11.isValid() && x11.grabKey(nativeKey, nativeMods, x11.rootWindow());
+    return QxtX11Key().grab(nativeKey, nativeMods);
 }
 
 bool QxtGlobalShortcutPrivate::unregisterShortcut(quint32 nativeKey, quint32 nativeMods)
 {
-    QxtX11Data x11;
-    return x11.isValid() && x11.ungrabKey(nativeKey, nativeMods, x11.rootWindow());
+    return QxtX11Key().ungrab(nativeKey, nativeMods);
 }
