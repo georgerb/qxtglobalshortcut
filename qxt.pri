@@ -1,4 +1,5 @@
-CONFIG += c++11
+QT += widgets
+CONFIG += qt c++11 library static
 
 DEFINES += BUILD_QXT_CORE
 
